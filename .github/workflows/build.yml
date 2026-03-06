@@ -1,122 +1,53 @@
-name: 🚀 Build Flutter APK
+name: Build Flutter APK
 
 on:
   push:
-    branches:
-      - main
-      - develop
-  pull_request:
-    branches:
-      - main
-  workflow_dispatch: # Permet de lancer manuellement depuis GitHub
+    branches: [ main ]
 
 jobs:
-  build-apk:
-    name: Build APK Android
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Récupérer le code source
-      - name: 📥 Checkout du code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Installer Java (requis pour Android SDK)
-      - name: ☕ Installer Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 3. Installer Flutter
-      - name: 🐦 Installer Flutter
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.24.0'
           channel: 'stable'
-          cache: true # Met en cache Flutter pour accélérer les builds
 
-      # 4. Vérifier l'installation
-      - name: 🔍 Flutter doctor
-        run: flutter doctor -v
+      - name: Create Flutter project
+        run: flutter create --platforms=android .
 
-      # 5. Installer les dépendances du projet
-      - name: 📦 Installer les dépendances
+      - name: Install dependencies
         run: flutter pub get
 
-      # 6. Analyser le code (optionnel mais recommandé)
-      - name: 🔎 Analyser le code
-        run: flutter analyze
-        continue-on-error: true # Ne bloque pas le build si des warnings existent
-
-      # 7. Lancer les tests
-      - name: 🧪 Lancer les tests
-        run: flutter test
-        continue-on-error: true
-
-      # 8. Compiler l'APK debug
-      - name: 🔨 Compiler APK Debug
-        run: flutter build apk --debug
-
-      # 9. Compiler l'APK release
-      - name: 🏗️ Compiler APK Release
+      - name: Build APK
         run: flutter build apk --release
 
-      # 10. Rendre l'APK téléchargeable depuis GitHub
-      - name: 📤 Upload APK Debug
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug
-          path: build/app/outputs/flutter-apk/app-debug.apk
-          retention-days: 7 # Conservé 7 jours
-
-      - name: 📤 Upload APK Release
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release
           path: build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 30 # Conservé 30 jours
+```
 
-  # Job optionnel : créer une Release GitHub automatique sur les tags
-  release:
-    name: 🎉 Créer une Release GitHub
-    runs-on: ubuntu-latest
-    needs: build-apk
-    if: startsWith(github.ref, 'refs/tags/v') # Seulement sur un tag vX.X.X
+---
 
-    steps:
-      - name: 📥 Checkout du code
-        uses: actions/checkout@v4
-
-      - name: ☕ Installer Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: 🐦 Installer Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.24.0'
-          channel: 'stable'
-          cache: true
-
-      - name: 📦 Installer les dépendances
-        run: flutter pub get
-
-      - name: 🏗️ Compiler APK Release
-        run: flutter build apk --release
-
-      - name: 🎉 Publier la Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: build/app/outputs/flutter-apk/app-release.apk
-          name: "Release ${{ github.ref_name }}"
-          body: |
-            ## 📱 Nouvelle version : ${{ github.ref_name }}
-            
-            ### Télécharger l'APK
-            Télécharge le fichier `app-release.apk` ci-dessous et installe-le sur ton appareil Android.
-            
-            > ⚠️ Active "Sources inconnues" dans les paramètres Android pour installer l'APK.
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+## Votre workflow sur le Pi
+```
+Éditer lib/*.dart sur le Pi
+        ↓
+git add . && git commit -m "update" && git push
+        ↓
+GitHub Actions génère l'APK automatiquement
+        ↓
+Télécharger l'APK depuis l'onglet Actions sur GitHub
