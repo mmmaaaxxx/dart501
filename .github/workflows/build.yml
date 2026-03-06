@@ -38,16 +38,3 @@ jobs:
         with:
           name: app-release
           path: build/app/outputs/flutter-apk/app-release.apk
-```
-
----
-
-## Votre workflow sur le Pi
-```
-Éditer lib/*.dart sur le Pi
-        ↓
-git add . && git commit -m "update" && git push
-        ↓
-GitHub Actions génère l'APK automatiquement
-        ↓
-Télécharger l'APK depuis l'onglet Actions sur GitHub
