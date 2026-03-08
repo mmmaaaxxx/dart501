@@ -31,19 +31,37 @@ class Throw {
   }
 }
 
+enum FinishMode { doubleOut, singleOut }
+
 class PlayerTurn {
   final List<Throw> throws;
   final int scoreBeforeTurn;
+  final FinishMode finishMode;
 
-  PlayerTurn({required this.scoreBeforeTurn}) : throws = [];
+  PlayerTurn({required this.scoreBeforeTurn, this.finishMode = FinishMode.doubleOut}) : throws = [];
 
   int get totalScore => throws.fold(0, (sum, t) => sum + t.score);
   int get remainingScore => scoreBeforeTurn - totalScore;
-  bool get isBust => remainingScore < 0 || remainingScore == 1;
+
+  bool get isBust {
+    if (finishMode == FinishMode.singleOut) {
+      return remainingScore < 0;
+    }
+    // doubleOut : bust si négatif ou score == 1 (impossible de finir sur un double)
+    return remainingScore < 0 || remainingScore == 1;
+  }
+
   bool get isComplete => throws.length == 3 || isWon;
-  bool get isWon =>
-      remainingScore == 0 && throws.isNotEmpty && throws.last.type == ThrowType.double ||
-      remainingScore == 0 && throws.isNotEmpty && throws.last.isBullseye;
+
+  bool get isWon {
+    if (remainingScore != 0 || throws.isEmpty) return false;
+    if (finishMode == FinishMode.singleOut) {
+      return true; // n'importe quel tir à 0 est valide
+    }
+    // doubleOut : doit finir sur un double ou bullseye
+    final last = throws.last;
+    return last.type == ThrowType.double || last.isBullseye;
+  }
 }
 
 class Player {
@@ -59,7 +77,6 @@ class Player {
         dartsThrown = 0,
         legsWon = 0;
 
-  int get totalDartsThrown => dartsThrown;
   double get average {
     if (dartsThrown == 0) return 0;
     final totalScored = history.fold(0, (sum, t) => sum + t.totalScore);
@@ -75,58 +92,59 @@ class Player {
   }
 }
 
+/// Snapshot d'un tour validé, pour pouvoir l'annuler
+class _TurnSnapshot {
+  final int playerIndex;
+  final int scoreBeforeTurn;
+  final int dartsThrownInTurn;
+  final PlayerTurn turn;
+
+  _TurnSnapshot({
+    required this.playerIndex,
+    required this.scoreBeforeTurn,
+    required this.dartsThrownInTurn,
+    required this.turn,
+  });
+}
+
 class GameModel {
-  final Player player1;
-  final Player player2;
+  final List<Player> players;
   int currentPlayerIndex;
   late PlayerTurn currentTurn;
   bool gameOver;
   String? winnerId;
+  final FinishMode finishMode;
 
-  GameModel({required String name1, required String name2})
-      : player1 = Player(name: name1),
-        player2 = Player(name: name2),
+  /// Historique des tours validés pour l'annulation
+  final List<_TurnSnapshot> _turnHistory = [];
+
+  GameModel({
+    required List<String> names,
+    this.finishMode = FinishMode.doubleOut,
+  })  : players = names.map((n) => Player(name: n)).toList(),
         currentPlayerIndex = 0,
         gameOver = false {
     _startNewTurn();
   }
 
-  Player get currentPlayer =>
-      currentPlayerIndex == 0 ? player1 : player2;
-
-  Player get otherPlayer =>
-      currentPlayerIndex == 0 ? player2 : player1;
+  Player get currentPlayer => players[currentPlayerIndex];
 
   void _startNewTurn() {
-    currentTurn = PlayerTurn(scoreBeforeTurn: currentPlayer.score);
+    currentTurn = PlayerTurn(
+      scoreBeforeTurn: currentPlayer.score,
+      finishMode: finishMode,
+    );
   }
 
-  /// Enregistre un lancer. Retourne true si le lancer est valide.
   bool addThrow(Throw t) {
     if (gameOver || currentTurn.isComplete) return false;
 
     currentTurn.throws.add(t);
 
-    // Bust check: score négatif ou égal à 1
-    if (currentTurn.isBust) {
-      return true; // lancer enregistré mais le tour sera annulé
-    }
+    if (currentTurn.isBust) return true;
 
-    // Victoire : doit terminer sur un double ou bullseye
-    if (currentTurn.remainingScore == 0) {
-      final last = currentTurn.throws.last;
-      final validFinish = last.type == ThrowType.double || last.isBullseye;
-      if (!validFinish) {
-        // Pas un double, c'est un bust
-        currentTurn.throws.last = Throw(
-          score: last.score,
-          segment: last.segment,
-          type: last.type,
-          isBull: last.isBull,
-          isBullseye: last.isBullseye,
-        );
-        return true;
-      }
+    // Victoire : isWon tient déjà compte du finishMode
+    if (currentTurn.isWon) {
       currentPlayer.score = 0;
       currentPlayer.dartsThrown += currentTurn.throws.length;
       currentPlayer.legsWon++;
@@ -139,12 +157,18 @@ class GameModel {
     return true;
   }
 
-  /// Valide le tour (manuel ou automatique après 3 lancers)
   void validateTurn() {
     if (gameOver) return;
 
+    // Sauvegarder le snapshot avant validation
+    _turnHistory.add(_TurnSnapshot(
+      playerIndex: currentPlayerIndex,
+      scoreBeforeTurn: currentTurn.scoreBeforeTurn,
+      dartsThrownInTurn: currentTurn.throws.length,
+      turn: currentTurn,
+    ));
+
     if (currentTurn.isBust) {
-      // Bust : on remet le score, on ne compte pas les points
       currentPlayer.dartsThrown += currentTurn.throws.length;
       currentPlayer.history.add(currentTurn);
     } else {
@@ -153,28 +177,49 @@ class GameModel {
       currentPlayer.history.add(currentTurn);
     }
 
-    // Changer de joueur
-    currentPlayerIndex = currentPlayerIndex == 0 ? 1 : 0;
+    currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
     _startNewTurn();
   }
 
-  /// Annuler le dernier lancer
+  /// Annuler le dernier lancer du tour en cours
   bool undoLastThrow() {
     if (currentTurn.throws.isEmpty) return false;
     currentTurn.throws.removeLast();
     return true;
   }
 
+  /// Annuler le tour entier du joueur précédent
+  bool undoLastTurn() {
+    if (_turnHistory.isEmpty) return false;
+
+    final snapshot = _turnHistory.removeLast();
+    final prevPlayer = players[snapshot.playerIndex];
+
+    // Restaurer le score et les statistiques du joueur précédent
+    prevPlayer.score = snapshot.scoreBeforeTurn;
+    prevPlayer.dartsThrown -= snapshot.dartsThrownInTurn;
+    if (prevPlayer.history.isNotEmpty) prevPlayer.history.removeLast();
+
+    // Revenir au joueur précédent
+    currentPlayerIndex = snapshot.playerIndex;
+    currentTurn = PlayerTurn(scoreBeforeTurn: currentPlayer.score);
+
+    return true;
+  }
+
+  bool get canUndoLastTurn => _turnHistory.isNotEmpty;
+
   void resetGame() {
-    player1.reset();
-    player2.reset();
+    for (final p in players) {
+      p.reset();
+    }
     currentPlayerIndex = 0;
     gameOver = false;
     winnerId = null;
+    _turnHistory.clear();
     _startNewTurn();
   }
 
-  /// Suggestions de finition (checkout)
   List<String> getCheckoutSuggestion(int score) {
     final Map<int, List<String>> checkouts = {
       170: ['T20', 'T20', 'Bull'],

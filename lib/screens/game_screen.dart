@@ -17,9 +17,7 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   late AnimationController _bustController;
-  late AnimationController _switchController;
   bool _showBust = false;
-  String _bustMessage = '';
 
   @override
   void initState() {
@@ -28,16 +26,11 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-    _switchController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
   }
 
   @override
   void dispose() {
     _bustController.dispose();
-    _switchController.dispose();
     super.dispose();
   }
 
@@ -63,7 +56,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       return;
     }
 
-    // Auto-validate after 3 throws
     if (widget.game.currentTurn.throws.length == 3) {
       Future.delayed(const Duration(milliseconds: 300), () {
         if (mounted) _validateTurn();
@@ -73,13 +65,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   void _validateTurn() {
     final isBust = widget.game.currentTurn.isBust;
-    final turnScore = widget.game.currentTurn.totalScore;
 
     setState(() {
-      if (isBust) {
-        _bustMessage = 'BUST ! Tour annulé';
-        _showBust = true;
-      }
+      if (isBust) _showBust = true;
       widget.game.validateTurn();
     });
 
@@ -96,6 +84,50 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     });
   }
 
+  /// Annuler le tour entier du joueur précédent
+  void _undoLastTurn() {
+    if (!widget.game.canUndoLastTurn) return;
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF141420),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Annuler le tour ?',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Le dernier tour de ${_previousPlayerName()} sera annulé et son score restauré.',
+          style: const TextStyle(color: Colors.white60),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Non', style: TextStyle(color: Colors.white38)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() => widget.game.undoLastTurn());
+            },
+            child: const Text('Oui, annuler',
+                style: TextStyle(
+                    color: Color(0xFFFF4757), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _previousPlayerName() {
+    if (widget.game.players.isEmpty) return '';
+    // Le joueur précédent est celui avant le currentPlayerIndex
+    final prevIndex = (widget.game.currentPlayerIndex - 1 + widget.game.players.length) %
+        widget.game.players.length;
+    return widget.game.players[prevIndex].name;
+  }
+
   void _showMenu() {
     showModalBottomSheet(
       context: context,
@@ -108,10 +140,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(
-              color: Colors.white24,
-              borderRadius: BorderRadius.circular(2),
-            )),
+            Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                )),
             const SizedBox(height: 24),
             _menuTile(Icons.refresh, 'Nouvelle partie', Colors.white, () {
               Navigator.pop(context);
@@ -134,10 +169,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _menuTile(IconData icon, String label, Color color, VoidCallback onTap) {
+  Widget _menuTile(
+      IconData icon, String label, Color color, VoidCallback onTap) {
     return ListTile(
       leading: Icon(icon, color: color),
-      title: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+      title: Text(label,
+          style: TextStyle(color: color, fontWeight: FontWeight.bold)),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       tileColor: color.withOpacity(0.05),
       onTap: onTap,
@@ -151,6 +188,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         !game.currentTurn.isComplete &&
         !game.gameOver;
     final canUndo = game.currentTurn.throws.isNotEmpty;
+    final canUndoTurn = game.canUndoLastTurn && game.currentTurn.throws.isEmpty;
 
     return Scaffold(
       body: Container(
@@ -166,12 +204,45 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             children: [
               Column(
                 children: [
-                  // Header avec scores
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                     child: Row(
                       children: [
                         const Text('🎯', style: TextStyle(fontSize: 20)),
+                        // Bouton annuler le tour précédent
+                        if (canUndoTurn)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: GestureDetector(
+                              onTap: _undoLastTurn,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFF4757).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                      color: const Color(0xFFFF4757)
+                                          .withOpacity(0.4)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.undo,
+                                        color: Color(0xFFFF4757), size: 14),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Tour de ${_previousPlayerName()}',
+                                      style: const TextStyle(
+                                          color: Color(0xFFFF4757),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         const Spacer(),
                         IconButton(
                           icon: const Icon(Icons.menu, color: Colors.white54),
@@ -182,10 +253,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   ),
                   ScoreHeader(game: game),
                   const SizedBox(height: 8),
-                  // Affichage du tour en cours
                   TurnDisplay(game: game),
                   const Spacer(),
-                  // Clavier de saisie
                   DartKeyboard(
                     game: game,
                     onThrow: _onThrow,
@@ -206,24 +275,26 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                         color: Colors.black54,
                         child: Center(
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 40, vertical: 24),
                             decoration: BoxDecoration(
                               color: const Color(0xFFFF4757),
                               borderRadius: BorderRadius.circular(20),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFFFF4757).withOpacity(0.5),
+                                  color:
+                                      const Color(0xFFFF4757).withOpacity(0.5),
                                   blurRadius: 40,
                                   spreadRadius: 10,
                                 ),
                               ],
                             ),
-                            child: Column(
+                            child: const Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Text('💥', style: TextStyle(fontSize: 48)),
-                                const SizedBox(height: 8),
-                                const Text(
+                                Text('💥', style: TextStyle(fontSize: 48)),
+                                SizedBox(height: 8),
+                                Text(
                                   'BUST !',
                                   style: TextStyle(
                                     fontSize: 40,
@@ -232,9 +303,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                                     letterSpacing: 4,
                                   ),
                                 ),
-                                const Text(
+                                Text(
                                   'Tour annulé',
-                                  style: TextStyle(color: Colors.white70, fontSize: 16),
+                                  style: TextStyle(
+                                      color: Colors.white70, fontSize: 16),
                                 ),
                               ],
                             ),

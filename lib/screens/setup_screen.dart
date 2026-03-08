@@ -14,6 +14,9 @@ class _SetupScreenState extends State<SetupScreen>
     with SingleTickerProviderStateMixin {
   final _p1Controller = TextEditingController(text: 'Joueur 1');
   final _p2Controller = TextEditingController(text: 'Joueur 2');
+  final _p3Controller = TextEditingController(text: 'Joueur 3');
+  int _playerCount = 2;
+  FinishMode _finishMode = FinishMode.doubleOut;
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
@@ -25,11 +28,13 @@ class _SetupScreenState extends State<SetupScreen>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     );
-    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
+    _fadeAnim =
+        CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(
       begin: const Offset(0, 0.3),
       end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
+    ).animate(
+        CurvedAnimation(parent: _animController, curve: Curves.easeOut));
     _animController.forward();
   }
 
@@ -38,17 +43,22 @@ class _SetupScreenState extends State<SetupScreen>
     _animController.dispose();
     _p1Controller.dispose();
     _p2Controller.dispose();
+    _p3Controller.dispose();
     super.dispose();
   }
 
   void _startGame() {
-    final name1 = _p1Controller.text.trim().isEmpty ? 'Joueur 1' : _p1Controller.text.trim();
-    final name2 = _p2Controller.text.trim().isEmpty ? 'Joueur 2' : _p2Controller.text.trim();
+    final names = [
+      _p1Controller.text.trim().isEmpty ? 'Joueur 1' : _p1Controller.text.trim(),
+      _p2Controller.text.trim().isEmpty ? 'Joueur 2' : _p2Controller.text.trim(),
+      if (_playerCount == 3)
+        _p3Controller.text.trim().isEmpty ? 'Joueur 3' : _p3Controller.text.trim(),
+    ];
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(
         pageBuilder: (_, __, ___) => GameScreen(
-          game: GameModel(name1: name1, name2: name2),
+          game: GameModel(names: names, finishMode: _finishMode),
         ),
         transitionsBuilder: (_, anim, __, child) =>
             FadeTransition(opacity: anim, child: child),
@@ -73,26 +83,174 @@ class _SetupScreenState extends State<SetupScreen>
             opacity: _fadeAnim,
             child: SlideTransition(
               position: _slideAnim,
-              child: Padding(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 32),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    const SizedBox(height: 40),
                     _buildHeader(),
-                    const SizedBox(height: 60),
-                    _buildPlayerField(_p1Controller, 'Joueur 1', Icons.person, const Color(0xFFE8C547)),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 40),
+                    _buildPlayerCountSelector(),
+                    const SizedBox(height: 12),
+                    _buildFinishModeSelector(),
+                    const SizedBox(height: 32),
+                    _buildPlayerField(_p1Controller, 'Joueur 1', Icons.person,
+                        const Color(0xFFE8C547)),
+                    const SizedBox(height: 16),
                     _buildVsDivider(),
-                    const SizedBox(height: 24),
-                    _buildPlayerField(_p2Controller, 'Joueur 2', Icons.person_outline, const Color(0xFF4ECDC4)),
-                    const SizedBox(height: 60),
+                    const SizedBox(height: 16),
+                    _buildPlayerField(_p2Controller, 'Joueur 2',
+                        Icons.person_outline, const Color(0xFF4ECDC4)),
+                    if (_playerCount == 3) ...[
+                      const SizedBox(height: 16),
+                      _buildVsDivider(),
+                      const SizedBox(height: 16),
+                      AnimatedOpacity(
+                        opacity: _playerCount == 3 ? 1 : 0,
+                        duration: const Duration(milliseconds: 300),
+                        child: _buildPlayerField(
+                            _p3Controller,
+                            'Joueur 3',
+                            Icons.person_2_outlined,
+                            const Color(0xFFFF6B9D)),
+                      ),
+                    ],
+                    const SizedBox(height: 48),
                     _buildStartButton(),
                     const SizedBox(height: 24),
                     _buildRulesNote(),
+                    const SizedBox(height: 32),
                   ],
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlayerCountSelector() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF141420),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        children: [
+          _countBtn(2),
+          _countBtn(3),
+        ],
+      ),
+    );
+  }
+
+  Widget _countBtn(int count) {
+    final isSelected = _playerCount == count;
+    const color = Color(0xFFE8C547);
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _playerCount = count),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? color.withOpacity(0.15) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? color.withOpacity(0.6) : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          child: Text(
+            '$count joueurs',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isSelected ? color : Colors.white38,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              letterSpacing: 1,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFinishModeSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            'MODE DE FIN',
+            style: TextStyle(
+              color: Colors.white38,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 2,
+            ),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF141420),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          padding: const EdgeInsets.all(4),
+          child: Row(
+            children: [
+              _finishBtn('Double Out', FinishMode.doubleOut, const Color(0xFF4ECDC4),
+                  'Finir sur un double'),
+              _finishBtn('Single Out', FinishMode.singleOut, const Color(0xFFFF6B9D),
+                  'N\'importe quel tir'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _finishBtn(String label, FinishMode mode, Color color, String sub) {
+    final isSelected = _finishMode == mode;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _finishMode = mode),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? color.withOpacity(0.15) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? color.withOpacity(0.6) : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          child: Column(
+            children: [
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: isSelected ? color : Colors.white38,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  letterSpacing: 1,
+                ),
+              ),
+              Text(
+                sub,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: isSelected ? color.withOpacity(0.6) : Colors.white24,
+                  fontSize: 10,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -145,14 +303,16 @@ class _SetupScreenState extends State<SetupScreen>
           ),
           child: const Text(
             'Règles Officielles',
-            style: TextStyle(color: Colors.white54, fontSize: 13, letterSpacing: 2),
+            style: TextStyle(
+                color: Colors.white54, fontSize: 13, letterSpacing: 2),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildPlayerField(TextEditingController ctrl, String hint, IconData icon, Color color) {
+  Widget _buildPlayerField(TextEditingController ctrl, String hint,
+      IconData icon, Color color) {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
@@ -161,7 +321,8 @@ class _SetupScreenState extends State<SetupScreen>
       ),
       child: TextField(
         controller: ctrl,
-        style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.bold),
+        style: TextStyle(
+            color: color, fontSize: 18, fontWeight: FontWeight.bold),
         textAlign: TextAlign.center,
         decoration: InputDecoration(
           hintText: hint,
@@ -180,7 +341,11 @@ class _SetupScreenState extends State<SetupScreen>
         Expanded(child: Divider(color: Colors.white12, thickness: 1)),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 16),
-          child: Text('VS', style: TextStyle(color: Colors.white38, fontWeight: FontWeight.bold, letterSpacing: 4)),
+          child: Text('VS',
+              style: TextStyle(
+                  color: Colors.white38,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 4)),
         ),
         Expanded(child: Divider(color: Colors.white12, thickness: 1)),
       ],
@@ -224,7 +389,8 @@ class _SetupScreenState extends State<SetupScreen>
     return const Text(
       'Double requis pour terminer • Bust = tour annulé',
       textAlign: TextAlign.center,
-      style: TextStyle(color: Colors.white30, fontSize: 12, letterSpacing: 1),
+      style:
+          TextStyle(color: Colors.white30, fontSize: 12, letterSpacing: 1),
     );
   }
 }

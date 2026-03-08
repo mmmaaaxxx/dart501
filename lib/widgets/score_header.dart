@@ -2,33 +2,68 @@
 import 'package:flutter/material.dart';
 import '../models/game_model.dart';
 
+// Couleurs par joueur
+const List<Color> kPlayerColors = [
+  Color(0xFFE8C547),
+  Color(0xFF4ECDC4),
+  Color(0xFFFF6B9D),
+];
+
 class ScoreHeader extends StatelessWidget {
   final GameModel game;
   const ScoreHeader({super.key, required this.game});
 
   @override
   Widget build(BuildContext context) {
-    final p1Active = game.currentPlayerIndex == 0;
-    final p2Active = game.currentPlayerIndex == 1;
+    final players = game.players;
 
+    if (players.length == 2) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: _PlayerScore(
+                player: players[0],
+                isActive: game.currentPlayerIndex == 0,
+                color: kPlayerColors[0],
+                align: TextAlign.left,
+              ),
+            ),
+            _CenterDivider(),
+            Expanded(
+              child: _PlayerScore(
+                player: players[1],
+                isActive: game.currentPlayerIndex == 1,
+                color: kPlayerColors[1],
+                align: TextAlign.right,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 3 joueurs : affichage vertical compact
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Row(
-        children: [
-          Expanded(child: _PlayerScore(
-            player: game.player1,
-            isActive: p1Active,
-            color: const Color(0xFFE8C547),
-            align: TextAlign.left,
-          )),
-          _CenterDivider(),
-          Expanded(child: _PlayerScore(
-            player: game.player2,
-            isActive: p2Active,
-            color: const Color(0xFF4ECDC4),
-            align: TextAlign.right,
-          )),
-        ],
+        children: List.generate(players.length, (i) {
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: i == 0 ? 0 : 4,
+                right: i == players.length - 1 ? 0 : 4,
+              ),
+              child: _PlayerScore(
+                player: players[i],
+                isActive: game.currentPlayerIndex == i,
+                color: kPlayerColors[i],
+                align: TextAlign.center,
+              ),
+            ),
+          );
+        }),
       ),
     );
   }
@@ -51,7 +86,7 @@ class _PlayerScore extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         color: isActive ? color.withOpacity(0.08) : Colors.transparent,
@@ -63,44 +98,53 @@ class _PlayerScore extends StatelessWidget {
       child: Column(
         crossAxisAlignment: align == TextAlign.left
             ? CrossAxisAlignment.start
-            : CrossAxisAlignment.end,
+            : align == TextAlign.right
+                ? CrossAxisAlignment.end
+                : CrossAxisAlignment.center,
         children: [
           Row(
             mainAxisAlignment: align == TextAlign.left
                 ? MainAxisAlignment.start
-                : MainAxisAlignment.end,
+                : align == TextAlign.right
+                    ? MainAxisAlignment.end
+                    : MainAxisAlignment.center,
             children: [
-              if (isActive && align == TextAlign.left)
+              if (isActive && align != TextAlign.right)
                 Container(
-                  width: 8, height: 8,
-                  margin: const EdgeInsets.only(right: 6),
-                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                  width: 7,
+                  height: 7,
+                  margin: const EdgeInsets.only(right: 5),
+                  decoration:
+                      BoxDecoration(color: color, shape: BoxShape.circle),
                 ),
               Flexible(
                 child: Text(
                   player.name,
                   style: TextStyle(
                     color: isActive ? color : Colors.white38,
-                    fontSize: 14,
+                    fontSize: 12,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1,
                   ),
                   overflow: TextOverflow.ellipsis,
+                  textAlign: align,
                 ),
               ),
               if (isActive && align == TextAlign.right)
                 Container(
-                  width: 8, height: 8,
-                  margin: const EdgeInsets.only(left: 6),
-                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                  width: 7,
+                  height: 7,
+                  margin: const EdgeInsets.only(left: 5),
+                  decoration:
+                      BoxDecoration(color: color, shape: BoxShape.circle),
                 ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             '${player.score}',
             style: TextStyle(
-              fontSize: 56,
+              fontSize: 44,
               fontWeight: FontWeight.w900,
               color: isActive ? Colors.white : Colors.white38,
               height: 1,
@@ -108,13 +152,14 @@ class _PlayerScore extends StatelessWidget {
             ),
             textAlign: align,
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             '⌀ ${player.average.toStringAsFixed(1)}',
             style: TextStyle(
               color: isActive ? color.withOpacity(0.7) : Colors.white24,
-              fontSize: 12,
+              fontSize: 11,
             ),
+            textAlign: align,
           ),
         ],
       ),
@@ -127,15 +172,14 @@ class _CenterDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8),
-      child: const Column(
-        children: [
-          Text('VS', style: TextStyle(
-            color: Colors.white24,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 2,
-          )),
-        ],
+      child: const Text(
+        'VS',
+        style: TextStyle(
+          color: Colors.white24,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 2,
+        ),
       ),
     );
   }
